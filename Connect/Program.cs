@@ -8,14 +8,8 @@ namespace Connect
         {
             Console.WriteLine("Connect Four!");
 
-            Console.WriteLine("Enter player one name:");
-            string playerOneName = Console.ReadLine();
-
-            Console.WriteLine("Enter player two name:");
-            string playerTwoName = Console.ReadLine();
-
-            Player playerOne = new Player(playerOneName, Token.RED);
-            Player playerTwo = new Player(playerTwoName, Token.YELLOW);
+            Player playerOne = new Player("AI 1", Token.RED);
+            Player playerTwo = new Player("AI 2", Token.YELLOW);
 
 
             ConnectFour connectFour = new ConnectFour(5, 5, playerOne, playerTwo);
@@ -30,14 +24,15 @@ namespace Connect
 
                 Console.WriteLine($"Enter a column number, player {currentPlayer}:");
 
-                int columnNumber = int.Parse(Console.ReadLine());
+                Move nextAIMove = ConnectFourMinimaxExtensions.GetNextMove(connectFour);
 
-                connectFour.Place(currentPlayer, columnNumber);
+                Console.WriteLine($"AI chose {nextAIMove.ColumnToPlaceToken}");
 
-                connectFour.AdvanceToNextPlayer();
+                connectFour.Place(new Move(currentPlayer, nextAIMove.ColumnToPlaceToken));
             }
 
             Console.WriteLine($"{winningPlayer.Name} wins!");
+            Console.WriteLine(connectFour.ToString());
         }
     }
 }

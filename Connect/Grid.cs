@@ -54,5 +54,18 @@ namespace Connect
                 throw new ArgumentOutOfRangeException($"{nameof(y)}={y} must be between {1} and {height}");
             }
         }
+
+        public Grid<T> Clone()
+        {
+            Grid<T> clone = new Grid<T>(width, height);
+
+            for (int i = 1; i <= width; i++) {
+                for (int j = 1; j <= height; j++) {
+                    clone[i, j] = this[i, j];
+                }
+            }
+
+            return clone;
+        }
     }
 }

@@ -54,6 +54,11 @@ namespace Connect
             Players = players;
             Grid = new Grid<Token>(Width, Height);
             CurrentPlayerIndex = 0;
+
+            foreach (Player player in Players)
+            {
+                player.ConnectFour = this;
+            }
         }
 
         private void CheckColumnNumber(int columnNumber)
@@ -115,74 +120,23 @@ namespace Connect
             CurrentPlayerIndex = (CurrentPlayerIndex + 1) % Players.Length;
         }
 
-        public bool TryGetWinningPlayer(out Player winningPlayer)
+        public bool IsGameOver(out Player winningPlayer)
         {
             // 1. Check all the rows
-            for (int row = 1; row <= Height; row++)
+            foreach (Token[] tokenArray in GetAllTokenArrays())
             {
-                // Count how many of the same token exist in a sequence
-                int consequtiveCount = 1;
-                Token previousToken = Token.BLANK;
-
-                for (int col = 1; col <= Width; col++)
+                if (IsWinningTokenArray(tokenArray))
                 {
-                    Token currentToken = Grid[col, row];
-
-                    if (currentToken.Equals(previousToken))
-                    {
-                        consequtiveCount++;
-                    }
-                    else
-                    {
-                        consequtiveCount = 1;
-                    }
-
-                    if (consequtiveCount == FOUR && !currentToken.Equals(Token.BLANK)) {
-                        winningPlayer = GetPlayerWithToken(currentToken);
-                        return true;
-                    }
-
-                    previousToken = currentToken;
+                    winningPlayer = GetPlayerWithToken(tokenArray[0]);
+                    return true;
                 }
             }
 
-            // 2. Check all the columns
-
-            // 1. Check all the rows
-            for (int col = 1; col <= Width; col++)
+            if (Enumerable.Range(1, Width).All(IsColumnFull))
             {
-                // Count how many of the same token exist in a sequence
-                int consequtiveCount = 1;
-                Token previousToken = Token.BLANK;
-
-                for (int row = 1; row <= Height; row++)
-                {
-                    Token currentToken = Grid[col, row];
-
-                    if (currentToken.Equals(previousToken))
-                    {
-                        consequtiveCount++;
-                    }
-                    else
-                    {
-                        consequtiveCount = 1;
-                    }
-
-                    if (consequtiveCount == FOUR && !currentToken.Equals(Token.BLANK))
-                    {
-                        winningPlayer = GetPlayerWithToken(currentToken);
-                        return true;
-                    }
-
-                    previousToken = currentToken;
-                }
+                winningPlayer = null;
+                return false;
             }
-
-            // 3. Check along the positively-sloped diagonals
-            // TODO
-
-            // 4. Check along the negatively-sloped diagonals
-            // TODO
 
             winningPlayer = default;
             return false;
@@ -223,31 +177,68 @@ namespace Connect
 
         public ConnectFour Clone()
         {
-            ConnectFour clone = new ConnectFour(Width, Height, Players);
+            ConnectFour clone = new ConnectFour(Width, Height, Players.Select(p => p.Clone()).ToArray());
 
             clone.Grid = Grid.Clone();
             clone.CurrentPlayerIndex = CurrentPlayerIndex;
 
+            foreach (Player player in clone.Players)
+            {
+                player.ConnectFour = clone;
+            }
+
             return clone;
+        }
+
+        public IEnumerable<Token[]> GetAllTokenArrays()
+        {
+            // Count in the horizontal direcation first
+            for (int row = 1; row <= this.Height; row++)
+            {
+                for (int i = 1, j = 2, k = 3, l = 4; l <= this.Width; i++, j++, k++, l++)
+                {
+                    Token[] tokens = { this.Grid[i, row], this.Grid[j, row], this.Grid[k, row], this.Grid[l, row] };
+
+                    yield return tokens;
+                }
+            }
+
+            // Count in the vertical direcation second
+            for (int col = 1; col <= this.Width; col++)
+            {
+                for (int i = 1, j = 2, k = 3, l = 4; l <= this.Height; i++, j++, k++, l++)
+                {
+                    Token[] tokens = { this.Grid[col, i], this.Grid[col, j], this.Grid[col, k], this.Grid[col, l] };
+
+                    yield return tokens;
+                }
+            }
+        }
+
+        public bool IsWinningTokenArray(Token[] tokens)
+        {
+            if (tokens == null || tokens.Length != 4)
+            {
+                throw new ArgumentException($"{nameof(tokens)} must be of length {4}");
+            }
+
+            return tokens.Distinct().Count() == 1 && tokens.All(t => t != Token.BLANK);
         }
     }
 
+    /// <summary>
+    /// All the AI functionality
+    /// </summary>
     public static class ConnectFourMinimaxExtensions
     {
-        public static bool IsGameOver(ConnectFour @this)
-        {
-            return @this.TryGetWinningPlayer(out _);
-        }
 
-        public static IEnumerable<Tuple<Move, ConnectFour>> GetChildGameStates(ConnectFour @this)
+        public static IEnumerable<Tuple<Move, ConnectFour>> GetChildGameStates(this ConnectFour @this)
         {
-            Player currentPlayer = @this.CurrentPlayer;
-
             for (int i = 1; i <= @this.Width; i++)
             {
                 if (@this.CanPlaceToken(i))
                 {
-                    Move move = new Move(currentPlayer, i);
+                    Move move = new Move(@this.CurrentPlayer, i);
 
                     ConnectFour clone = @this.Clone();
                     clone.Place(move);
@@ -263,97 +254,143 @@ namespace Connect
         /// </summary>
         /// <param name="this"></param>
         /// <returns></returns>
-        public static int Evaluation(ConnectFour @this)
+        public static int Evaluation(this ConnectFour @this)
         {
             return Evaluation(@this, @this.CurrentPlayer) - Evaluation(@this, @this.NextPlayer);
         }
 
         private static int Evaluation(ConnectFour @this, Player player)
         {
-            int countOfAdjacentPairs = 0;
+            int score = 0;
 
-            // Count in the horizontal direcation first
-            for (int row = 1; row <= @this.Height; row++) {
-                for (int i = 1, j = 2; j <= @this.Width; i++, j++)
-                {
-                    if (@this.Grid[i, row] == player.Token) {
-                        if (@this.Grid[i, row] == @this.Grid[j, row])
-                        {
-                            countOfAdjacentPairs++;
-                        }
-                    }
-                }
-            }
-
-            // Count in the vertical direcation second
-            for (int col = 1; col <= @this.Width; col++)
+            foreach (Token[] tokenArray in @this.GetAllTokenArrays())
             {
-                for (int i = 1, j = 2; j <= @this.Height; i++, j++)
-                {
-                    if (@this.Grid[col, i] == player.Token)
-                    {
-                        if (@this.Grid[col, i] == @this.Grid[col, j])
-                        {
-                            countOfAdjacentPairs++;
-                        }
-                    }
-                }
+                score += ScoreWindow(tokenArray, player.Token);
             }
 
-            return countOfAdjacentPairs;
+            return score;
         }
 
-        public static Move GetNextMove(ConnectFour @this)
+        private static int ScoreWindow(Token[] tokens, Token playerToken)
         {
-            Tuple<Move, int> minimax = Minimax(new Tuple<Move, ConnectFour>(null, @this.Clone()), 5, true);
-            return minimax.Item1;
+            if (tokens == null || tokens.Length != 4)
+            {
+                throw new ArgumentException($"{nameof(tokens)} must be of length {4}");
+            }
+
+            int score = 0;
+
+            // This player has four in a row
+            if (tokens.All(t => t == playerToken))
+            {
+                score += 100;
+            }
+            // This player has three placed with one blank in a window
+            else if (tokens.Where(t => t == playerToken).Count() == 3 && tokens.Where(t => t == Token.BLANK).Count() == 1)
+            {
+                score += 50;
+            }
+            // Player has two tokens and two blank spaces in a window
+            else if (tokens.Where(t => t == playerToken).Count() == 2 && tokens.Where(t => t == Token.BLANK).Count() == 2)
+            {
+                score += 20;
+            }
+            // Player has two tokens and two blank spaces in a window
+            else if (tokens.Where(t => t == playerToken).Count() == 1 && tokens.Where(t => t == Token.BLANK).Count() == 3)
+            {
+                score += 10;
+            }
+            // Other player player has four in a row
+            else if (tokens.All(t => t != playerToken && t != Token.BLANK))
+            {
+                score -= 100;
+            }
+            // Other player has three tokens and one blank space in a window
+            else if (tokens.Where(t => t != playerToken && t != Token.BLANK).Count() == 3 && tokens.Where(t => t == Token.BLANK).Count() == 1)
+            {
+                score -= 50;
+            }
+            // Other player has two tokens and two blank spaces in a window
+            else if (tokens.Where(t => t != playerToken && t != Token.BLANK).Count() == 2 && tokens.Where(t => t == Token.BLANK).Count() == 2)
+            {
+                score -= 20;
+            }
+            // Other player has two tokens and two blank spaces in a window
+            else if (tokens.Where(t => t != playerToken && t != Token.BLANK).Count() == 1 && tokens.Where(t => t == Token.BLANK).Count() == 3)
+            {
+                score -= 10;
+            }
+
+            return score;
         }
 
-        /*
-         *   function minimax(position, depth, maximizingPlayer)
-	            if depth == 0 or game over in position
-		            return static evaluation of position
+        public static Move GetNextMove(this ConnectFour @this, int depth = 3)
+        {
+            Tuple<Move, int> minimax = Minimax(
+                moveAndPosition: new Tuple<Move, ConnectFour>(Move.Default, @this.Clone()), 
+                depth: depth, 
+                alpha: int.MinValue, 
+                beta: int.MaxValue, 
+                maximizingCurrentPlayer: true);
 
-	            if maximizingPlayer
-		            maxEval = -infinity
-		            for each child of position
-			            eval = minimax(child, depth - 1, false)
-			            maxEval = max(maxEval, eval)
-		            return maxEval
+            Move nextMove = minimax.Item1;
 
-	            else
-		            minEval = +infinity
-		            for each child of position
-			            eval = minimax(child, depth - 1, true)
-			            minEval = min(minEval, eval)
-		            return minEval
+            if (nextMove == Move.Default)
+            {
+                return null;
+                throw new InvalidOperationException();
+            }
 
+            return nextMove;
+        }
 
-            // initial call
-            minimax(currentPosition, 3, true)
-         */
-
-        private static Tuple<Move, int> Minimax(Tuple<Move, ConnectFour> moveAndPosition, int depth, bool maximizingCurrentPlayer)
+        private static Tuple<Move, int> Minimax(
+            Tuple<Move, ConnectFour> moveAndPosition, 
+            int depth, 
+            int alpha, 
+            int beta, 
+            bool maximizingCurrentPlayer)
         {
             ConnectFour position = moveAndPosition.Item2;
-            if (depth == 0 || IsGameOver(position))
+            if (position.IsGameOver(out Player winningPlayer) || depth == 0)
             {
-                return new Tuple<Move, int>(moveAndPosition.Item1, Evaluation(position));
+                Move move = moveAndPosition.Item1;
+                int evaluation;
+                
+                if (winningPlayer != default)
+                {
+                    evaluation = winningPlayer == move.Player ? int.MaxValue : int.MinValue;
+                }
+                else
+                {
+                    evaluation = position.Evaluation();
+                }
+                
+                return new Tuple<Move, int>(moveAndPosition.Item1, evaluation);
             }
 
             if (maximizingCurrentPlayer)
             {
-                int maxEval = -1 * int.MaxValue;
-                Move maxMove = default;
+                int maxEval = int.MinValue;
+                Move maxMove = Move.Default;
 
                 foreach (Tuple<Move, ConnectFour> child in GetChildGameStates(position))
                 {
-                    Tuple<Move, int> evalResult = Minimax(child, depth - 1, !maximizingCurrentPlayer);
+                    Tuple<Move, int> evalResult = Minimax(child, depth - 1, alpha, beta, !maximizingCurrentPlayer);
 
-                    if (evalResult.Item2 > maxEval)
+                    Move move = evalResult.Item1;
+                    int eval = evalResult.Item2;
+
+                    if (eval > maxEval)
                     {
-                        maxEval = evalResult.Item2;
-                        maxMove = evalResult.Item1;
+                        maxMove = move;
+                        maxEval = eval;
+                    }
+
+                    alpha = Math.Max(alpha, evalResult.Item2);
+                    if (beta <= alpha)
+                    {
+                        break;
                     }
                 }
 
@@ -362,16 +399,25 @@ namespace Connect
             else
             {
                 int minEval = int.MaxValue;
-                Move minMove = default;
+                Move minMove = Move.Default;
 
                 foreach (Tuple<Move, ConnectFour> child in GetChildGameStates(position))
                 {
-                    Tuple<Move, int> evalResult = Minimax(child, depth - 1, !maximizingCurrentPlayer);
+                    Tuple<Move, int> result = Minimax(child, depth - 1, alpha, beta, !maximizingCurrentPlayer);
+                    
+                    Move move = result.Item1;
+                    int eval = result.Item2;
 
-                    if (evalResult.Item2 < minEval)
+                    if (eval < minEval)
                     {
-                        minEval = evalResult.Item2;
-                        minMove = evalResult.Item1;
+                        minMove = move;
+                        minEval = eval;
+                    }
+
+                    beta = Math.Min(beta, result.Item2);
+                    if (beta <= alpha)
+                    {
+                        break;
                     }
                 }
 

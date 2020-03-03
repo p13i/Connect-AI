@@ -4,8 +4,8 @@ namespace Connect
     public enum Token
     {
         BLANK = 0,
-        RED,
-        YELLOW,
+        RED = 1,
+        YELLOW = 2,
     }
 
     public static class TokenExtensions

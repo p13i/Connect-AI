@@ -8,31 +8,68 @@ namespace Connect
         {
             Console.WriteLine("Connect Four!");
 
-            Player playerOne = new Player("AI 1", Token.RED);
-            Player playerTwo = new Player("AI 2", Token.YELLOW);
+            string playerOneName = ReadPlayerName(1);
+            string playerTwoName = ReadPlayerName(2);
 
+            Player playerOne = GetPlayerForName(playerOneName, 1);
+            Player playerTwo = GetPlayerForName(playerTwoName, 2);
 
-            ConnectFour connectFour = new ConnectFour(5, 5, playerOne, playerTwo);
+            int width = 7;
+            int height = 6;
+
+            ConnectFour connectFour = new ConnectFour(width, height, playerOne, playerTwo);
 
             Player winningPlayer;
 
-            while (!connectFour.TryGetWinningPlayer(out winningPlayer))
+            int round = 1;
+            do
             {
+                Console.WriteLine($"Round #{round++}");
+
                 Console.WriteLine(connectFour.ToString());
 
-                Player currentPlayer = connectFour.CurrentPlayer;
+                Move nextMove = connectFour.CurrentPlayer.GetNextMove();
 
-                Console.WriteLine($"Enter a column number, player {currentPlayer}:");
+                if (nextMove == null)
+                {
+                    winningPlayer = null;
+                    break;
+                }
 
-                Move nextAIMove = ConnectFourMinimaxExtensions.GetNextMove(connectFour);
+                Console.WriteLine($"{connectFour.CurrentPlayer} chose {nextMove.ColumnToPlaceToken}");
 
-                Console.WriteLine($"AI chose {nextAIMove.ColumnToPlaceToken}");
+                connectFour.Place(new Move(connectFour.CurrentPlayer, nextMove.ColumnToPlaceToken));
+            
+            } while (!connectFour.IsGameOver(out winningPlayer));
 
-                connectFour.Place(new Move(currentPlayer, nextAIMove.ColumnToPlaceToken));
-            }
-
-            Console.WriteLine($"{winningPlayer.Name} wins!");
+            Console.WriteLine(winningPlayer == null ? "Draw or AI fails to find solution!" : $"{winningPlayer.Name} wins!");
             Console.WriteLine(connectFour.ToString());
+        }
+
+        private static Player GetPlayerForName(string name, int playerNumber)
+        {
+            if (name.Contains("ai", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return new MinimaxPlayer($"AI {playerNumber}", (Token) playerNumber);
+            }
+            else
+            {
+                return new HumanPlayer(name, (Token)playerNumber);
+            }
+        }
+
+        public static string ReadPlayerName(int playerNumber)
+        {
+            string name;
+
+            do
+            {
+                Console.WriteLine($"Enter player #{playerNumber} name: ");
+                name = Console.ReadLine();
+            } 
+            while (string.IsNullOrWhiteSpace(name));
+
+            return name; 
         }
     }
 }
